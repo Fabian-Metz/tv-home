@@ -27,7 +27,7 @@ Nach 10 Minuten ohne Eingabe bleibt nur die Uhr sichtbar. Die erste Taste weckt 
 
 1. TizenBrew auf dem Fernseher installieren (Entwicklermodus an).
 2. In den Entwickler-Einstellungen des Fernsehers die **Host PC IP auf `127.0.0.1`** stellen. TizenBrew braucht das, um Module zu starten.
-3. TizenBrew öffnen, **grüne Taste** (Modul-Manager), **Add GitHub Module**, dann `BENUTZER/tv-home` eingeben.
+3. TizenBrew öffnen, **grüne Taste** (Modul-Manager), **Add GitHub Module**, dann `Fabian-Metz/tv-home` eingeben.
 4. **Home** aus der Modulliste öffnen.
 5. Beim ersten Druck auf Xbox oder Einstellungen fragt der Fernseher einmal, ob „Home“ ihn steuern darf. Mit **Zulassen** bestätigen.
 
