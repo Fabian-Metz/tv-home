@@ -17,7 +17,7 @@ window.HOME_CONFIG = {
       { name: 'YouTube', sub: 'TizenTube', type: 'module', match: 'tizentube', color: ['#f0473c', '#7d1410'] },
       { name: 'Prime Video', type: 'app', match: 'prime video|amazon', ids: ['3201910019365', 'org.tizen.primevideo'], color: ['#1b9fd8', '#0b3f5e'] },
       { name: 'Disney+', type: 'app', match: 'disney', ids: ['3201901017640'], color: ['#2c50c9', '#0c1b55'] },
-      { name: 'Xbox', sub: 'HDMI 1', type: 'key', key: 'KEY_HDMI1', color: ['#2ea043', '#0f4a1c'] }
+      { name: 'Xbox', sub: 'HDMI 2', type: 'key', key: 'KEY_HDMI2', color: ['#2ea043', '#0f4a1c'] }
     ],
     [
       { name: 'ARD', sub: 'Mediathek', type: 'app', match: '^ard\\b|ard mediathek', ids: [], color: ['#1f5fbf', '#0a2a5e'] },
