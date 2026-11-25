@@ -1,0 +1,11 @@
+{
+  "name": "tv-home",
+  "version": "0.1.0",
+  "description": "Ruhiger, werbefreier Startbildschirm fuer Samsung-Tizen-TVs als TizenBrew-Modul.",
+  "packageType": "app",
+  "appName": "Home",
+  "appPath": "app/index.html",
+  "serviceFile": "service/service.js",
+  "keys": ["ColorF0Red", "ColorF2Yellow"],
+  "license": "MIT"
+}

@@ -1,0 +1,89 @@
+/*
+ * Geschrieben fuer den alten Browser-Kern von Tizen 5 (Chromium 63):
+ * kein flex-gap, kein inset, kein clamp(), kein backdrop-filter.
+ * Bewegt werden nur transform und opacity, damit es auf schwacher Hardware fluessig bleibt.
+ */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%; height: 100%; overflow: hidden; background: #07080b; color: #fff;
+  font-family: "SamsungOne", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: hidden; transform-origin: 0 0; }
+
+/* Hintergrund: eine Farbflaeche, die zur Kachel im Fokus passt, darueber feste Verlaeufe. */
+#bg { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; background-color: #141821; transition: background-color 700ms ease; }
+#bg i { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+#bg .glow { background: radial-gradient(ellipse at 22% 0%, rgba(255,255,255,.13) 0%, rgba(255,255,255,0) 58%); }
+#bg .vignette { background: linear-gradient(180deg, rgba(7,8,11,.30) 0%, rgba(7,8,11,.78) 62%, rgba(7,8,11,.96) 100%); }
+
+#clock { position: absolute; left: 100px; top: 62px; font-size: 92px; font-weight: 300; letter-spacing: -1px; line-height: 1; }
+#date { position: absolute; left: 104px; top: 168px; font-size: 30px; opacity: .62; }
+#status { position: absolute; right: 100px; top: 84px; font-size: 24px; opacity: .55; text-align: right; }
+
+/* Grosse Kacheln */
+.favrow { position: absolute; left: 100px; white-space: nowrap; transition: opacity 500ms ease; }
+#fav0 { top: 258px; }
+#fav1 { top: 512px; }
+
+.tile {
+  position: relative; display: inline-block; vertical-align: top; overflow: hidden;
+  width: 400px; height: 214px; margin-right: 40px; border-radius: 28px;
+  box-shadow: 0 14px 34px rgba(0,0,0,.42);
+  transition: transform 180ms cubic-bezier(.2,.8,.2,1), opacity 180ms ease;
+  opacity: .78;
+}
+.tile .shine { position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+  background: linear-gradient(140deg, rgba(255,255,255,.24) 0%, rgba(255,255,255,0) 48%); }
+.tile .ring { position: absolute; left: 0; top: 0; width: 100%; height: 100%; border-radius: 28px;
+  border: 5px solid #fff; opacity: 0; transition: opacity 180ms ease; }
+.tile .text { position: absolute; left: 34px; right: 30px; bottom: 28px; white-space: normal; }
+.tile .name { font-size: 46px; font-weight: 700; letter-spacing: -.6px; line-height: 1.05; text-shadow: 0 2px 14px rgba(0,0,0,.35); }
+.tile .sub { margin-top: 6px; font-size: 24px; opacity: .78; }
+.tile.long .name { font-size: 38px; }
+
+.tile.focus { transform: scale(1.075); opacity: 1; z-index: 2; }
+.tile.focus .ring { opacity: 1; }
+.tile.missing { opacity: .34; }
+.tile.missing.focus { opacity: .7; }
+
+/* Kleine Kacheln */
+#moreLabel { position: absolute; left: 104px; top: 772px; font-size: 22px; letter-spacing: 3px; text-transform: uppercase; opacity: .5; transition: opacity 500ms ease; }
+#moreClip { position: absolute; left: 0; top: 806px; width: 1920px; height: 200px; overflow: hidden; transition: opacity 500ms ease; }
+#more { position: absolute; left: 100px; top: 14px; white-space: nowrap; transition: transform 260ms cubic-bezier(.2,.8,.2,1); }
+
+.mini {
+  position: relative; display: inline-block; vertical-align: top; overflow: hidden;
+  width: 204px; height: 150px; margin-right: 26px; border-radius: 22px; background: #1b1f28;
+  transition: transform 180ms cubic-bezier(.2,.8,.2,1), opacity 180ms ease, background-color 180ms ease;
+  opacity: .8;
+}
+.mini .pic { position: absolute; left: 62px; top: 20px; width: 80px; height: 80px; border-radius: 18px; overflow: hidden;
+  background: #2b313d; text-align: center; line-height: 80px; font-size: 38px; font-weight: 700; }
+.mini .pic img { position: absolute; left: 0; top: 0; width: 80px; height: 80px; }
+.mini .label { position: absolute; left: 12px; right: 12px; bottom: 14px; font-size: 20px; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini .ring { position: absolute; left: 0; top: 0; width: 100%; height: 100%; border-radius: 22px; border: 4px solid #fff; opacity: 0; transition: opacity 180ms ease; }
+.mini.focus { transform: scale(1.09); opacity: 1; background: #2a303c; z-index: 2; }
+.mini.focus .ring { opacity: 1; }
+
+#hint { position: absolute; left: 104px; bottom: 34px; font-size: 20px; opacity: .34; transition: opacity 500ms ease; }
+
+#toast { position: absolute; left: 0; bottom: 96px; width: 1920px; text-align: center; font-size: 28px; opacity: 0; transition: opacity 220ms ease; z-index: 5; }
+#toast span { display: inline-block; max-width: 1500px; padding: 16px 34px; border-radius: 44px; background: rgba(0,0,0,.82); }
+#toast.on { opacity: 1; }
+
+/* Ruhezustand: nur die Uhr bleibt. */
+body.idle .favrow, body.idle #moreLabel, body.idle #moreClip, body.idle #hint, body.idle #status { opacity: 0; }
+
+/* Diagnose */
+#diag { display: none; position: absolute; left: 80px; top: 60px; width: 1760px; height: 960px; z-index: 10;
+  background: #0d0f14; border-radius: 28px; padding: 40px 52px; box-shadow: 0 30px 80px rgba(0,0,0,.7); }
+#diag h2 { font-size: 34px; margin-bottom: 14px; }
+#diagInfo { font-size: 22px; line-height: 1.5; opacity: .75; margin-bottom: 18px; }
+#diagList { height: 660px; overflow: hidden; font-size: 22px; line-height: 44px; column-count: 2; column-gap: 50px; column-fill: auto; }
+#diagList div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#diagList b { font-weight: 400; color: #7fd1ff; }
+#diagFoot { position: absolute; left: 52px; bottom: 34px; font-size: 20px; opacity: .45; }
