@@ -21,6 +21,10 @@
   // Alles andere sind Systembausteine, die niemand auf dem Startbildschirm braucht.
   var STORE_ID = /^([A-Za-z0-9]{10}\.[A-Za-z0-9_-]+|\d{9,})$/;
   var BUILT_IN = { 'org.tizen.browser': 1, 'org.tizen.netflix-app': 1, 'org.tizen.primevideo': 1, 'com.samsung.tv.store': 1 };
+  // Viele Apps bringen unsichtbare Hilfsprogramme mit (Hintergrunddienste, Vorschau).
+  // Der TV meldet sie wie Apps. Auf den Startbildschirm gehoeren sie nicht.
+  var HELPER = /service|continue|preview|manager|background|\bbg\b|daemon|agent|helper|widget|plugin|provider|launcher|setup/i;
+  function pkg(id) { var dot = id.indexOf('.'); return dot === 10 ? id.slice(0, 10) : id; }
 
   var rows = [];            // rows[r] = Liste von Kacheln { el, def, ids }
   var pos = { r: 0, c: 0 };
@@ -30,6 +34,19 @@
   var diagPage = 0;
   var idleTimer = null;
   var toastTimer = null;
+
+  // Der Lader (index.html) bringt nur eine leere Seite mit. Das Geruest entsteht hier.
+  var stage = document.createElement('div');
+  stage.id = 'stage';
+  stage.innerHTML =
+    '<div id="bg"><i class="glow"></i><i class="vignette"></i></div>' +
+    '<div id="clock"></div><div id="date"></div><div id="status"></div>' +
+    '<div class="favrow" id="fav0"></div><div class="favrow" id="fav1"></div>' +
+    '<div id="moreLabel">Weitere Apps</div><div id="moreClip"><div id="more"></div></div>' +
+    '<div id="hint">OK öffnen · Gelb: App-Liste · Rot: neu laden</div>' +
+    '<div id="toast"><span id="toastText"></span></div>' +
+    '<div id="diag"><h2>Diagnose</h2><div id="diagInfo"></div><div id="diagList"></div><div id="diagFoot"></div></div>';
+  document.body.appendChild(stage);
 
   function el(id) { return document.getElementById(id); }
   function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
@@ -110,6 +127,7 @@
   // Ordnet den Favoriten die echten Kennungen vom TV zu und baut die untere Zeile.
   function applyApps() {
     var used = {};
+    var usedPkg = {};
     var hide = rx(CFG.hide);
     var r, c, i;
 
@@ -120,7 +138,7 @@
         var match = rx(tile.def.match);
         var ids = [];
         for (i = 0; apps && match && i < apps.length; i++) {
-          if (match.test(apps[i].name)) { ids.push(apps[i].id); used[apps[i].id] = 1; }
+          if (match.test(apps[i].name) && !HELPER.test(apps[i].name)) { ids.push(apps[i].id); used[apps[i].id] = 1; usedPkg[pkg(apps[i].id)] = 1; }
         }
         var fallback = tile.def.ids || [];
         for (i = 0; i < fallback.length; i++) { if (ids.indexOf(fallback[i]) === -1) ids.push(fallback[i]); used[fallback[i]] = 1; }
@@ -136,6 +154,10 @@
       if (a.show === false || used[a.id]) continue;
       if (!STORE_ID.test(a.id) && !BUILT_IN[a.id]) continue;
       if (hide && hide.test(a.name)) continue;
+      if (HELPER.test(a.name) || HELPER.test(a.id)) continue;
+      // Je App-Paket nur eine Kachel, und keine zweite fuer einen Favoriten.
+      if (usedPkg[pkg(a.id)]) continue;
+      usedPkg[pkg(a.id)] = 1;
       more.push({ name: a.name, id: a.id, icon: a.icon, type: 'app' });
     }
     more.sort(function (x, y) { return x.name.toLowerCase() < y.name.toLowerCase() ? -1 : 1; });
@@ -242,13 +264,13 @@
     if (def.type === 'module') return launchModule(tile);
     if (def.type === 'key') {
       toast(def.name + ' …', 1500);
-      return svc('POST', '/key', { key: def.key }, function (err, json) {
+      return svc('POST', '/key?key=' + encodeURIComponent(def.key), { key: def.key }, function (err, json) {
         if (err || !json || !json.ok) toast(def.name + ' geht nicht: ' + (err || (json && json.error) || 'Fehler'), 5000);
       });
     }
     if (!tile.ids.length) return toast(def.name + ' wurde auf diesem TV nicht gefunden. Gelbe Taste zeigt alle Apps.', 5000);
     toast(def.name + ' wird geöffnet …');
-    svc('POST', '/launch', { ids: tile.ids }, function (err, json) {
+    svc('POST', '/launch?ids=' + encodeURIComponent(tile.ids.slice(0, 6).join(',')), { ids: tile.ids }, function (err, json) {
       if (err) return toast(def.name + ' geht nicht: ' + err, 5000);
       if (!json.ok) toast(def.name + ' geht nicht: ' + (json.error || 'Fehler'), 5000);
     });
@@ -261,7 +283,7 @@
     el('diag').style.display = on ? 'block' : 'none';
     if (!on) return;
     diagPage = 0;
-    var info = 'Dienst: ' + (serviceInfo ? 'läuft (Version ' + serviceInfo.version + ', TV-Zugriff ' + (serviceInfo.tizen ? 'ja' : 'nein') + ')' : 'nicht erreichbar');
+    var info = 'Seite: Stand ' + esc(window.HOME_BUILD || '?') + ' · Dienst: ' + (serviceInfo ? 'läuft (Version ' + serviceInfo.version + ', Stand ' + esc(serviceInfo.build || 'mitgeliefert') + ', TV-Zugriff ' + (serviceInfo.tizen ? 'ja' : 'nein') + ')' : 'nicht erreichbar');
     if (serviceInfo && serviceInfo.remoteError) info += ' · Fernbedienung: ' + serviceInfo.remoteError;
     info += '<br>Apps vom TV: ' + (apps ? apps.length : 'unbekannt') + '<br>Browser: ' + esc(navigator.userAgent);
     el('diagInfo').innerHTML = info;
@@ -314,7 +336,11 @@
     else if (k === KEY.DOWN) moveRow(1);
     else if (k === KEY.OK) { if (current()) activate(current()); }
     else if (k === KEY.YELLOW) showDiag(true);
-    else if (k === KEY.RED) location.reload();
+    else if (k === KEY.RED) {
+      // Neu laden und dabei erneut nach einem neueren Stand fragen.
+      try { sessionStorage.removeItem('home.reloaded'); sessionStorage.removeItem('home.retry'); } catch (err) { /* kein Speicher */ }
+      location.reload();
+    }
     // Zurueck macht auf dem Startbildschirm absichtlich nichts.
   }
 
@@ -345,7 +371,7 @@
     { id: '3201606009684', name: 'Spotify' }, { id: 'org.tizen.browser', name: 'Internet' },
     { id: '3201512006963', name: 'Plex' }, { id: '3201807016597', name: 'Apple TV' },
     { id: '3202203026841', name: 'Twitch' }, { id: 'com.samsung.tv.store', name: 'Apps' },
-    { id: 'abcdefghij.SamsungTVPlus', name: 'Samsung TV Plus' }, { id: 'org.tizen.system-thing', name: 'Systemdienst' }
+    { id: 'abcdefghij.SamsungTVPlus', name: 'Samsung TV Plus' }, { id: 'ardardarda.ArdMTContinueWatching', name: 'ArdMTContinueWatching' }, { id: 'ardardarda.Mediathek', name: 'ARD Mediathek' }, { id: 'ariaariaar.Service', name: 'Aria Video BG Service' }, { id: 'pppppppppp.preview', name: 'preview' }, { id: 'org.tizen.system-thing', name: 'Systemdienst' }
   ];
 
   function loadApps(attempt) {

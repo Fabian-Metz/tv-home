@@ -16,7 +16,7 @@
  *
  * Zum Testen am Rechner:  TV_HOST=192.168.x.x node service/service.js
  */
-(function () {
+function homeService(BUILD) {
   'use strict';
 
   var http = require('http');
@@ -26,7 +26,7 @@
   var fs = require('fs');
   var pathLib = require('path');
 
-  var VERSION = '0.1.0';
+  var VERSION = '0.2.0';
   var PORT = 8098;
   var ENV = (typeof process !== 'undefined' && process.env) || {};
   var TV_HOST = ENV.TV_HOST || '127.0.0.1';
@@ -283,7 +283,7 @@
     if (req.method === 'OPTIONS') return send(req, res, 204, {});
 
     if (route === 'GET /ping') {
-      return send(req, res, 200, { ok: true, version: VERSION, tizen: HAS_TIZEN, remoteError: remote.lastError });
+      return send(req, res, 200, { ok: true, version: VERSION, build: BUILD || '', tizen: HAS_TIZEN, remoteError: remote.lastError });
     }
     if (route === 'GET /apps') {
       return listApps(function (err, apps) {
@@ -295,7 +295,9 @@
 
     if (route === 'POST /launch') {
       return readBody(req, function (err, body) {
-        var ids = (!err && body && body.ids instanceof Array) ? body.ids : [];
+        // Die Kennungen stehen in der Adresse (?ids=a,b) oder im Inhalt ({ ids: [...] }).
+        var ids = url.query.ids ? String(url.query.ids).split(',') : [];
+        if (!ids.length && !err && body && body.ids && body.ids.length) ids = body.ids;
         var clean = [];
         for (var i = 0; i < ids.length && clean.length < 6; i++) if (ID_RE.test(String(ids[i]))) clean.push(String(ids[i]));
         if (!clean.length) return send(req, res, 400, { ok: false, error: 'keine gueltige Kennung' });
@@ -307,8 +309,9 @@
     }
     if (route === 'POST /key') {
       return readBody(req, function (err, body) {
-        var key = (!err && body && String(body.key)) || '';
-        if (!KEY_RE.test(key)) return send(req, res, 400, { ok: false, error: 'ungueltige Taste' });
+        var key = url.query.key || (!err && body && body.key) || '';
+        key = String(key).replace(/\s/g, '').toUpperCase();
+        if (!KEY_RE.test(key)) return send(req, res, 400, { ok: false, error: 'ungueltige Taste (' + key.slice(0, 24) + ')' });
         sendKey(key);
         send(req, res, 200, { ok: true });
       });
@@ -320,5 +323,57 @@
     try { handle(req, res); } catch (e) { try { send(req, res, 500, { ok: false, error: e.message }); } catch (e2) { /* schon gesendet */ } }
   });
   server.on('error', function (e) { log('Dienst nicht gestartet: ' + e.message); });
-  server.listen(PORT, '127.0.0.1', function () { log('Dienst laeuft auf Port ' + PORT); });
+  server.listen(PORT, '127.0.0.1', function () { log('Dienst laeuft auf Port ' + PORT + ' (Stand ' + (BUILD || 'mitgeliefert') + ')'); });
+}
+
+
+/*
+ * Selbst-Aktualisierung. TizenBrew holt diese Datei ueber jsDelivr, und dort
+ * kann der Stand bis zu 12 Stunden alt sein. Deshalb fragt der Dienst beim
+ * Start GitHub nach dem neuesten Stand und laedt sich selbst von genau diesem
+ * Stand neu. Klappt das nicht, laeuft die mitgelieferte Fassung.
+ */
+(function () {
+  var REPO = 'Fabian-Metz/tv-home';
+  var env = (typeof process !== 'undefined' && process.env) || {};
+  if (typeof HOME_FRESH !== 'undefined') return homeService(HOME_FRESH);
+  if (env.TV_HOST || env.HOME_DEV) return homeService('');
+
+  var https = require('https');
+  var started = false;
+  function runLocal() { if (!started) { started = true; homeService(''); } }
+
+  function get(host, path, cb) {
+    var done = false;
+    function finish(err, text) { if (!done) { done = true; cb(err, text); } }
+    try {
+      var req = https.request({ host: host, path: path, method: 'GET', headers: { 'User-Agent': 'tv-home' } }, function (res) {
+        var chunks = [];
+        res.on('data', function (c) { chunks.push(c); });
+        res.on('end', function () {
+          if (res.statusCode !== 200) return finish(new Error('HTTP ' + res.statusCode));
+          finish(null, Buffer.concat(chunks).toString('utf8'));
+        });
+      });
+      req.on('error', finish);
+      req.setTimeout(6000, function () { req.abort(); finish(new Error('Zeit abgelaufen')); });
+      req.end();
+    } catch (e) { finish(e); }
+  }
+
+  setTimeout(runLocal, 9000); // nie ausfallen, nur weil GitHub langsam ist
+  get('api.github.com', '/repos/' + REPO + '/commits/main', function (err, text) {
+    var sha = '';
+    try { sha = String(JSON.parse(text).sha || ''); } catch (e) { /* keine Antwort */ }
+    if (err || !/^[0-9a-f]{40}$/.test(sha)) return runLocal();
+    get('cdn.jsdelivr.net', '/gh/' + REPO + '@' + sha + '/service/service.js', function (err2, code) {
+      if (err2 || !code || started) return runLocal();
+      started = true;
+      try {
+        Function('require', 'HOME_FRESH', code)(require, sha.slice(0, 7));
+      } catch (e) {
+        homeService('');
+      }
+    });
+  });
 })();

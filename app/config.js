@@ -28,7 +28,7 @@ window.HOME_CONFIG = {
   ],
 
   // Zeile "Weitere Apps": Apps, deren Name hierauf passt, werden nie gezeigt.
-  hide: 'tizenbrew|samsung tv plus|bixby|e-manual|galerie|gallery|smartthings|universal guide|samsung promotion|privacy|datenschutz',
+  hide: 'tizenbrew|samsung tv plus|bixby|e-manual|galerie|gallery|smartthings|universal guide|samsung promotion|privacy|datenschutz|^apps$',
 
   // Zusaetzliche Tasten-Kacheln in der unteren Zeile.
   extras: [

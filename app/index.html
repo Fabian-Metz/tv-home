@@ -4,33 +4,79 @@
 <meta charset="utf-8">
 <title>Home</title>
 <meta name="viewport" content="width=1920, height=1080">
-<link rel="stylesheet" href="style.css">
+<style>html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #07080b; }</style>
 </head>
 <body>
-<div id="stage">
-  <div id="bg"><i class="glow"></i><i class="vignette"></i></div>
+<script>
+/*
+ * Lader. Diese Datei bleibt klein und aendert sich selten.
+ *
+ * TizenBrew holt die Dateien ueber jsDelivr, und dort kann der Stand bis zu
+ * 12 Stunden alt sein. Deshalb merkt sich der Lader den neuesten Stand von
+ * GitHub und laedt Aussehen und Bedienung von genau diesem Stand.
+ * Start: sofort mit dem gemerkten Stand. Danach im Hintergrund pruefen, ob es
+ * einen neueren gibt, und dann einmal neu laden.
+ */
+(function () {
+  var REPO = 'Fabian-Metz/tv-home';
+  var CDN = 'https://cdn.jsdelivr.net/gh/' + REPO + '@';
+  var store = {
+    get: function (k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } },
+    set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) { /* kein Speicher */ } },
+    sget: function (k) { try { return sessionStorage.getItem(k) || ''; } catch (e) { return ''; } },
+    sset: function (k, v) { try { sessionStorage.setItem(k, v); } catch (e) { /* kein Speicher */ } }
+  };
+  var sha = store.get('home.sha');
+  if (!/^[0-9a-f]{40}$/.test(sha)) sha = '';
 
-  <div id="clock"></div>
-  <div id="date"></div>
-  <div id="status"></div>
+  function script(src, next, fail) {
+    var s = document.createElement('script');
+    s.src = src;
+    s.onload = next;
+    s.onerror = fail;
+    document.body.appendChild(s);
+  }
 
-  <div class="favrow" id="fav0"></div>
-  <div class="favrow" id="fav1"></div>
+  function load(base, build, fail) {
+    window.HOME_BASE = base;
+    window.HOME_BUILD = build;
+    var css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = base + 'style.css';
+    document.head.appendChild(css);
+    script(base + 'config.js', function () { script(base + 'main.js', function () {}, fail); }, fail);
+  }
 
-  <div id="moreLabel">Weitere Apps</div>
-  <div id="moreClip"><div id="more"></div></div>
+  function loadBundled() { load('', 'mitgeliefert', function () {}); }
 
-  <div id="hint">OK öffnen · Gelb: App-Liste · Rot: neu laden</div>
-  <div id="toast"><span id="toastText"></span></div>
+  if (sha) {
+    load(CDN + sha + '/app/', sha.slice(0, 7), function () {
+      // Der gemerkte Stand laesst sich nicht laden: vergessen und neu anfangen.
+      store.set('home.sha', '');
+      if (store.sget('home.retry') !== '1') { store.sset('home.retry', '1'); location.reload(); }
+    });
+  } else {
+    loadBundled();
+  }
 
-  <div id="diag">
-    <h2>Diagnose</h2>
-    <div id="diagInfo"></div>
-    <div id="diagList"></div>
-    <div id="diagFoot">Hoch / Runter blättern · Zurück schließen</div>
-  </div>
-</div>
-<script src="config.js"></script>
-<script src="main.js"></script>
+  // Im Hintergrund nach einem neueren Stand fragen.
+  setTimeout(function () {
+    var x = new XMLHttpRequest();
+    x.open('GET', 'https://api.github.com/repos/' + REPO + '/commits/main', true);
+    x.timeout = 8000;
+    x.onload = function () {
+      var latest = '';
+      try { latest = String(JSON.parse(x.responseText).sha || ''); } catch (e) { /* keine Antwort */ }
+      if (!/^[0-9a-f]{40}$/.test(latest) || latest === sha) return;
+      store.set('home.sha', latest);
+      // Hoechstens einmal je Stand neu laden, damit nie eine Schleife entsteht.
+      if (store.sget('home.reloaded') === latest) return;
+      store.sset('home.reloaded', latest);
+      location.reload();
+    };
+    try { x.send(); } catch (e) { /* offline */ }
+  }, 400);
+})();
+</script>
 </body>
 </html>
